@@ -9,25 +9,29 @@ on:
 jobs:
   ct-checker:
     runs-on: ubuntu-latest
-    container:
-      image: openquantumsafe/liboqs:latest
 
     steps:
-      # Step 1: Checkout your repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Ensure build dependencies exist
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
-          apt update
-          apt install -y build-essential
+          sudo apt update
+          sudo apt install -y build-essential cmake git python3 python3-pip
 
-      # Step 3: Build your constant-time checker
-      - name: Compile ct-checker
+      - name: Build liboqs from source
+        run: |
+          git clone --branch main https://github.com/open-quantum-safe/liboqs.git
+          cd liboqs
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON ..
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig  # Ensure dynamic linker finds liboqs
+
+      - name: Build constant-time checker
         run: |
           gcc -O2 -Wall -I/usr/local/include -o ct-checker harness.c -L/usr/local/lib -loqs -lm
 
-      # Step 4: Run the checker
-      - name: Run ct-checker
+      - name: Run checker
         run: ./ct-checker
