@@ -1,39 +1,33 @@
-name: Constant-Time Checker
+name: Constant-Time Checker CI
 
 on:
   push:
     branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
-  ctcheck:
+  ct-checker:
     runs-on: ubuntu-latest
+    container:
+      image: openquantumsafe/liboqs:latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      # Step 1: Checkout your repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y build-essential liboqs-dev
+      # Step 2: Ensure build dependencies exist
+      - name: Install build dependencies
+        run: |
+          apt update
+          apt install -y build-essential
 
-    - name: Build ct-checker
-      run: |
-        gcc -O2 -Wall -I/usr/local/include -o ct-checker harness.c -L/usr/local/lib -loqs -lm
-        chmod +x ct-checker
+      # Step 3: Build your constant-time checker
+      - name: Compile ct-checker
+        run: |
+          gcc -O2 -Wall -I/usr/local/include -o ct-checker harness.c -L/usr/local/lib -loqs -lm
 
-    - name: Run ct-checker
-      id: run_ct
-      run: |
-        ./ct-checker
-      continue-on-error: true
-
-    - name: Check result
-      run: |
-        if grep -q "❌" <(./ct-checker); then
-          echo "Timing difference detected! ❌"
-          exit 1
-        else
-          echo "No significant timing difference ✅"
-        fi
+      # Step 4: Run the checker
+      - name: Run ct-checker
+        run: ./ct-checker
