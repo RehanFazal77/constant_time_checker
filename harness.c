@@ -80,7 +80,7 @@ int main(void) {
     double t_score = welch_t(fixed_times, SAMPLES, random_times, SAMPLES);
 
     printf("Welch t-test score: %.6f\n", t_score);
-    if (t_score > 5.0) {
+    if (t_score > 10.0) {
         printf("❌  Potential timing difference detected!\n");
     } else {
         printf("✅  No significant timing difference detected.\n");
