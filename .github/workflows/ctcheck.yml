@@ -2,14 +2,13 @@ name: Constant-Time Checker CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
 
 jobs:
   ct-checker:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -17,21 +16,47 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y build-essential cmake git python3 python3-pip
+          sudo apt install -y build-essential cmake git libssl-dev
 
       - name: Build liboqs from source
         run: |
-          git clone --branch main https://github.com/open-quantum-safe/liboqs.git
-          cd liboqs
-          mkdir build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON ..
+          git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git
+          mkdir -p liboqs/build
+          cd liboqs/build
+          cmake -DCMAKE_BUILD_TYPE=Release ..
           make -j$(nproc)
           sudo make install
-          sudo ldconfig  # Ensure dynamic linker finds liboqs
+          sudo ldconfig
+          cd ../../
 
-      - name: Build constant-time checker
+      - name: Build ct-checker
         run: |
           gcc -O2 -Wall -I/usr/local/include -o ct-checker harness.c -L/usr/local/lib -loqs -lm
 
-      - name: Run checker
-        run: ./ct-checker
+      - name: Run ct-checker for multiple KEMs
+        run: |
+          echo "Algorithm | Timing Result" > ci_summary.txt
+          echo "-------------------------" >> ci_summary.txt
+
+          for kem in OQS_KEM_alg_kyber_512 OQS_KEM_alg_kyber_768 OQS_KEM_alg_kyber_1024; do
+              echo "Running $kem..."
+              ./ct-checker $kem > output.txt
+              
+              if grep -q "❌" output.txt; then
+                  result="FAIL"
+              else
+                  result="PASS"
+              fi
+
+              echo "$kem | $result" >> ci_summary.txt
+          done
+
+          echo "CI Summary:"
+          cat ci_summary.txt
+
+          if grep -q "FAIL" ci_summary.txt; then
+              echo "❌ One or more algorithms failed!"
+              exit 1
+          else
+              echo "✅ All algorithms passed!"
+          fi
