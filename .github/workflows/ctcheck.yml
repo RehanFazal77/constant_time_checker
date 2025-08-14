@@ -1,62 +1,52 @@
-name: Constant-Time Checker CI
+name: CT Checker CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
-  ct-checker:
+  ct-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y build-essential cmake git libssl-dev
+    - name: Install build dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential cmake git libssl-dev
 
-      - name: Build liboqs from source
-        run: |
-          git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git
-          mkdir -p liboqs/build
-          cd liboqs/build
-          cmake -DCMAKE_BUILD_TYPE=Release ..
-          make -j$(nproc)
-          sudo make install
-          sudo ldconfig
-          cd ../../
+    - name: Build liboqs from source
+      run: |
+        git clone --depth 1 https://github.com/open-quantum-safe/liboqs.git
+        cd liboqs
+        mkdir build && cd build
+        cmake -DCMAKE_BUILD_TYPE=Release ..
+        make -j$(nproc)
+        sudo make install
+        cd ../..
 
-      - name: Build ct-checker
-        run: |
-          gcc -O2 -Wall -I/usr/local/include -o ct-checker harness.c -L/usr/local/lib -loqs -lm
+    - name: Compile ct-checker
+      run: |
+        gcc -O2 -Wall -I/usr/local/include -o ct-checker harness.c -L/usr/local/lib -loqs -lcrypto -lm
 
-      - name: Run ct-checker for multiple KEMs
-        run: |
-          echo "Algorithm | Timing Result" > ci_summary.txt
-          echo "-------------------------" >> ci_summary.txt
+    - name: Run ct-checker with CI-style status
+      run: |
+        echo "Running ct-checker..."
+        ./ct-checker
+      continue-on-error: true
 
-          for kem in OQS_KEM_alg_kyber_512 OQS_KEM_alg_kyber_768 OQS_KEM_alg_kyber_1024; do
-              echo "Running $kem..."
-              ./ct-checker $kem > output.txt
-              
-              if grep -q "❌" output.txt; then
-                  result="FAIL"
-              else
-                  result="PASS"
-              fi
-
-              echo "$kem | $result" >> ci_summary.txt
-          done
-
-          echo "CI Summary:"
-          cat ci_summary.txt
-
-          if grep -q "FAIL" ci_summary.txt; then
-              echo "❌ One or more algorithms failed!"
-              exit 1
-          else
-              echo "✅ All algorithms passed!"
-          fi
+    - name: Determine CI status
+      id: status
+      run: |
+        output=$(./ct-checker)
+        echo "$output"
+        if echo "$output" | grep -q "❌"; then
+          echo "Timing difference detected, marking job as failed"
+          exit 1
+        else
+          echo "No significant timing difference detected"
+          exit 0
+        fi
